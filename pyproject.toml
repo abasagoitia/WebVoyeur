@@ -1,0 +1,83 @@
+[tool.poetry]
+name = "webvoyeur"
+version = "0.1.0"
+description = "Capture webpages as PNG screenshots with rendered CSS and JavaScript"
+authors = ["Alexandre Basagoitia <alexandre@basagitia.net>"]
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/abasagoitia/webvoyeur"
+repository = "https://github.com/abasagoitia/webvoyeur"
+keywords = ["web", "screenshot", "selenium", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Multimedia :: Graphics :: Capture :: Screen Capture",
+]
+packages = [
+    { include = "webvoyeur" }
+]
+
+[tool.poetry.scripts]
+webvoyeur = "webvoyeur.cli:cli_main"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+typer = "^0.12.0"
+rich = "^13.7.0"
+click = "8.1.7"
+playwright = "==1.56.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+black = "^23.12.0"
+isort = "^5.13.0"
+flake8 = "^6.1.0"
+mypy = "^1.7.0"
+pytest-asyncio = "^0.21.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312', 'py313']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | \.eggs
+  | \.mypy_cache
+  | \.pytest_cache
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
