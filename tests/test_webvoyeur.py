@@ -4,14 +4,15 @@ These tests verify that the Peeker class functions correctly in real scenarios
 by using actual Playwright browser instances and capturing real webpages.
 """
 
-import logging
-import time
-from pathlib import Path
-import shutil
-import pytest
 import http.server
+import logging
+import shutil
 import socketserver
 import threading
+import time
+from pathlib import Path
+
+import pytest
 
 from webvoyeur.peeker import (
     DEFAULT_HEIGHT,
@@ -26,7 +27,6 @@ from webvoyeur.peeker import (
     _validate_wait_time,
 )
 from webvoyeur.utilities import BrowserType
-
 
 # ============================================================================
 # Fixtures
@@ -339,7 +339,9 @@ class TestCaptureSingle:
         peeker = Peeker(output_dir=test_output_dir, normalize_urls=False)
         try:
             file_url = f"file://{large_html_file.absolute()}"
-            result_no_scroll = peeker.capture_single(file_url, filename="no_scroll.png", scroll=False)
+            result_no_scroll = peeker.capture_single(
+                file_url, filename="no_scroll.png", scroll=False
+            )
             result_scroll = peeker.capture_single(file_url, filename="with_scroll.png", scroll=True)
 
             assert result_no_scroll is not None
