@@ -155,3 +155,11 @@ This project uses `pytest`. To run the test suite:
 ```bash
 poetry run pytest
 ```
+
+# Author
+
+Built by Basagoitia, Alexandre
+
+# Credits
+
+This project was inspired by [EyeWitness](https://github.com/redsiege/EyeWitness)
