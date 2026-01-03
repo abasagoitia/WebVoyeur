@@ -8,6 +8,7 @@ from typer import BadParameter, Context, Option, Typer, echo
 
 from webvoyeur.peeker import Peeker
 from webvoyeur.utilities import BrowserType, parse_textfile
+from webvoyeur.nmap_parser import NmapParser
 
 
 class LogLevel(str, Enum):
@@ -165,6 +166,47 @@ def batch(
         log_level=CONFIG.log_level,
     ) as peeker:
         output = peeker.capture_batch(urls, wait_time=wait_time, scroll=scroll)
+        receipt = Path(CONFIG.output_dir, "receipt.txt")
+        receipt.write_text("\n".join(output.keys()))
+
+
+@app.command()
+def nmap(
+    nmap_xml: Annotated[
+        Path,
+        Option(
+            "--nmap_xml",
+            help="Nmap XML output file",
+            file_okay=True,
+            dir_okay=False,
+            exists=True,
+        ),
+    ],
+    wait_time: Annotated[
+        int, Option("--wait-time", "-t", help="Seconds to wait before capturing screenshot")
+    ] = 2,
+    scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
+):
+    parser = NmapParser(nmap_xml)
+    hosts: list[str] = []
+    for host in parser.hosts:
+        for port in host.ports:
+            if port.service == "http":
+                hosts.append(f"http://{host.ip}:{port.port}")
+            elif port.service == "https":
+                hosts.append(f"https://{host.ip}:{port.port}")
+
+    with Peeker(
+        output_dir=CONFIG.output_dir,
+        browser=Config.browser,
+        timeout=CONFIG.timeout,
+        normalize_urls=CONFIG.normalize_urls,
+        max_workers=CONFIG.max_workers,
+        width=CONFIG.width,
+        height=CONFIG.height,
+        log_level=CONFIG.log_level,
+    ) as peeker:
+        output = peeker.capture_batch(hosts, wait_time=wait_time, scroll=scroll)
         receipt = Path(CONFIG.output_dir, "receipt.txt")
         receipt.write_text("\n".join(output.keys()))
 
