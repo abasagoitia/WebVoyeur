@@ -92,15 +92,16 @@ class Peeker:
     """
 
     def __init__(
-        self,
-        output_dir: Path | str = "./output",
-        browser: BrowserType = BrowserType.firefox,
-        timeout: int = DEFAULT_TIMEOUT,
-        normalize_urls: bool = True,
-        max_workers: int = DEFAULT_MAX_WORKERS,
-        width: int = DEFAULT_WIDTH,
-        height: int = DEFAULT_HEIGHT,
-        log_level: int = logging.INFO,
+            self,
+            output_dir: Path | str = "./output",
+            browser: BrowserType = BrowserType.firefox,
+            timeout: int = DEFAULT_TIMEOUT,
+            normalize_urls: bool = True,
+            max_workers: int = DEFAULT_MAX_WORKERS,
+            width: int = DEFAULT_WIDTH,
+            height: int = DEFAULT_HEIGHT,
+            ignore_https_errors: bool = True,
+            log_level: int = logging.INFO,
     ):
         """Initialize the Peeker with configuration parameters.
 
@@ -123,12 +124,13 @@ class Peeker:
             ValueError: If timeout, max_workers, width, or height are invalid.
             RuntimeError: If browser initialization fails.
         """
-        _ensure_playwright_browsers()
+        # _ensure_playwright_browsers()
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._timeout = _validate_timeout(timeout)
         self._normalize_urls = normalize_urls
         self._max_workers = _validate_max_workers(max_workers)
+        self._ignore_https_errors = ignore_https_errors
         self._width = _validate_dimension(width, "Width")
         self._height = _validate_dimension(height, "Height")
         self._browser: Browser | None = None
@@ -198,12 +200,12 @@ class Peeker:
             raise
 
     async def _async_capture(
-        self,
-        page: Page,
-        url: str,
-        filename: str | None = None,
-        wait_time: int = DEFAULT_WAIT_TIME,
-        scroll: bool = False,
+            self,
+            page: Page,
+            url: str,
+            filename: str | None = None,
+            wait_time: int = DEFAULT_WAIT_TIME,
+            scroll: bool = False,
     ) -> Path:
         """Asynchronously capture a screenshot of a webpage.
 
@@ -264,11 +266,11 @@ class Peeker:
         return screenshot_path
 
     async def _async_single(
-        self,
-        url: str,
-        filename: str | None = None,
-        wait_time: int = DEFAULT_WAIT_TIME,
-        scroll: bool = False,
+            self,
+            url: str,
+            filename: str | None = None,
+            wait_time: int = DEFAULT_WAIT_TIME,
+            scroll: bool = False,
     ) -> Path | None:
         """Asynchronously capture a single webpage screenshot.
 
@@ -294,7 +296,7 @@ class Peeker:
                 raise RuntimeError("Browser is not initialized")
 
             viewport = ViewportSize(width=self._width, height=self._height)
-            context = await self._browser.new_context(viewport=viewport)
+            context = await self._browser.new_context(viewport=viewport, ignore_https_errors=self._ignore_https_errors)
             self._logger.debug(f"Created new context for {url}")
             page = await context.new_page()
             self._logger.debug(f"Created new page for {url}")
@@ -315,7 +317,7 @@ class Peeker:
                     self._logger.debug(f"Error closing context: {e}")
 
     async def _async_batch(
-        self, urls: list[str], wait_time: int = DEFAULT_WAIT_TIME, scroll: bool = False
+            self, urls: list[str], wait_time: int = DEFAULT_WAIT_TIME, scroll: bool = False
     ) -> dict[str, Path | None]:
         """Asynchronously capture multiple webpage screenshots concurrently.
 
@@ -349,7 +351,8 @@ class Peeker:
                 context = None
                 try:
                     viewport = ViewportSize(width=self._width, height=self._height)
-                    context = await self._browser.new_context(viewport=viewport)
+                    context = await self._browser.new_context(viewport=viewport,
+                                                              ignore_https_errors=self._ignore_https_errors)
                     page = await context.new_page()
                     path = await self._async_capture(
                         page=page, url=url, wait_time=wait_time, scroll=scroll
@@ -372,11 +375,11 @@ class Peeker:
         return results
 
     def capture_single(
-        self,
-        url: str,
-        filename: str | None = None,
-        wait_time: int = DEFAULT_WAIT_TIME,
-        scroll: bool = False,
+            self,
+            url: str,
+            filename: str | None = None,
+            wait_time: int = DEFAULT_WAIT_TIME,
+            scroll: bool = False,
     ) -> Path | None:
         """Capture a single webpage screenshot (synchronous).
 
@@ -424,7 +427,7 @@ class Peeker:
         )
 
     def capture_batch(
-        self, urls: list[str], wait_time: int = DEFAULT_WAIT_TIME, scroll: bool = False
+            self, urls: list[str], wait_time: int = DEFAULT_WAIT_TIME, scroll: bool = False
     ) -> dict:
         """Capture multiple webpage screenshots concurrently (synchronous).
 

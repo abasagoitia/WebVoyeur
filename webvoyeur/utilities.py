@@ -1,6 +1,7 @@
 from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse
+from time import time
 
 
 class BrowserType(Enum):
@@ -61,7 +62,7 @@ def get_filename_from_url(url: str) -> str:
     filename = parsed.netloc.replace("www.", "").replace(".", "_")
     if parsed.path and parsed.path != "/":
         filename += "_" + parsed.path.strip("/").replace("/", "_")[:50]
-    return filename + ".png"
+    return filename + "_" + str(time()) + ".png"
 
 
 def parse_textfile(file: Path) -> list[str]:

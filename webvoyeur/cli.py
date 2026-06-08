@@ -55,6 +55,7 @@ class Config:
     max_workers: int = 4
     width: int = 1280
     height: int = 720
+    ignore_https_errors: bool = True
     log_level: LogLevel | int = LogLevel.INFO
 
 
@@ -72,24 +73,31 @@ logger = logging.getLogger(__name__)
 
 @app.callback()
 def setup_cb(
-    ctx: Context,
-    log_level: Annotated[LogLevel, Option("--log-level", "-l")] = CONFIG.log_level,
-    output_dir: Annotated[
-        Path, Option("--output", "-o", dir_okay=True, file_okay=False, exists=False)
-    ] = CONFIG.output_dir,
-    normalize_urls: Annotated[
-        bool, Option("--no-normalize", help="Don't auto-add https:// to URL without protocol")
-    ] = CONFIG.normalize_urls,
-    max_workers: Annotated[
-        int, Option("--max-workers", "-j", help="Maximum number of concurrent capture operations")
-    ] = CONFIG.max_workers,
-    width: Annotated[int, Option("--width", "-w", help="Viewport width in pixels")] = CONFIG.width,
-    height: Annotated[
-        int, Option("--height", "-h", help="Viewport height in pixels")
-    ] = Config.height,
-    browser: Annotated[
-        BrowserType, Option("--browser", "-b", help="Browser: chrome or firefox")
-    ] = CONFIG.browser.value,
+        ctx: Context,
+        log_level: Annotated[LogLevel, Option("--log-level", "-l")] = CONFIG.log_level,
+        output_dir: Annotated[
+            Path, Option("--output", "-o", dir_okay=True, file_okay=False, exists=False)
+        ] = CONFIG.output_dir,
+        normalize_urls: Annotated[
+            bool, Option("--no-normalize", help="Don't auto-add https:// to URL without protocol")
+        ] = CONFIG.normalize_urls,
+        max_workers: Annotated[
+            int, Option("--max-workers", "-j", help="Maximum number of concurrent capture operations")
+        ] = CONFIG.max_workers,
+        width: Annotated[int, Option("--width", "-w", help="Viewport width in pixels")] = CONFIG.width,
+        height: Annotated[
+            int, Option("--height", "-h", help="Viewport height in pixels")
+        ] = CONFIG.height,
+        ignore_https_errors: Annotated[
+            bool,
+            Option(
+                "--ignore-https-errors/--strict-tls",
+                help="Ignore HTTPS certificate errors, or use --strict-tls to validate certificates",
+            ),
+        ] = CONFIG.ignore_https_errors,
+        browser: Annotated[
+            BrowserType, Option("--browser", "-b", help="Browser: chrome or firefox")
+        ] = CONFIG.browser,
 ):
     """
     Configures the application based on the provided context and command-line options.
@@ -140,28 +148,29 @@ def setup_cb(
         max_workers=max_workers,
         width=width,
         height=height,
+        ignore_https_errors=ignore_https_errors,
         log_level=level_map[log_level],
     )
 
 
 @app.command()
 def single(
-    url: Annotated[str, Option("--url", "-u", help="URL to capture")],
-    filename: Annotated[
-        Path,
-        Option(
-            "--filename",
-            "-f",
-            dir_okay=False,
-            file_okay=True,
-            exists=False,
-            help="Filepath to save output file",
-        ),
-    ] = None,
-    wait_time: Annotated[
-        int, Option("--wait-time", "-t", help="Seconds to wait before capturing screenshot")
-    ] = 2,
-    scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
+        url: Annotated[str, Option("--url", "-u", help="URL to capture")],
+        filename: Annotated[
+            Path,
+            Option(
+                "--filename",
+                "-f",
+                dir_okay=False,
+                file_okay=True,
+                exists=False,
+                help="Filepath to save output file",
+            ),
+        ] = None,
+        wait_time: Annotated[
+            int, Option("--wait-time", "-t", help="Seconds to wait before capturing screenshot")
+        ] = 2,
+        scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
 ):
     """
     Capture a screenshot of a single webpage and save it to a specified file.
@@ -189,14 +198,15 @@ def single(
         None
     """
     with Peeker(
-        output_dir=CONFIG.output_dir,
-        browser=Config.browser,
-        timeout=CONFIG.timeout,
-        normalize_urls=CONFIG.normalize_urls,
-        max_workers=CONFIG.max_workers,
-        width=CONFIG.width,
-        height=CONFIG.height,
-        log_level=CONFIG.log_level,
+            output_dir=CONFIG.output_dir,
+            browser=CONFIG.browser,
+            timeout=CONFIG.timeout,
+            normalize_urls=CONFIG.normalize_urls,
+            max_workers=CONFIG.max_workers,
+            width=CONFIG.width,
+            height=CONFIG.height,
+            ignore_https_errors=CONFIG.ignore_https_errors,
+            log_level=CONFIG.log_level,
     ) as peeker:
         output = peeker.capture_single(url, filename=filename, wait_time=wait_time, scroll=scroll)
 
@@ -205,30 +215,30 @@ def single(
 
 @app.command()
 def batch(
-    urls_txt: Annotated[
-        Path | None,
-        Option(
-            "--urls_txt",
-            help="File containing URLs to capture",
-            file_okay=True,
-            dir_okay=False,
-            exists=True,
-        ),
-    ] = None,
-    urls_csv: Annotated[
-        Path | None,
-        Option(
-            "--urls_csv",
-            help="File containing URLs to capture (CSV format)",
-            file_okay=True,
-            dir_okay=False,
-            exists=True,
-        ),
-    ] = None,
-    wait_time: Annotated[
-        int, Option("--wait-time", "-t", help="Seconds to wait before capturing screenshot")
-    ] = 2,
-    scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
+        urls_txt: Annotated[
+            Path | None,
+            Option(
+                "--urls_txt",
+                help="File containing URLs to capture",
+                file_okay=True,
+                dir_okay=False,
+                exists=True,
+            ),
+        ] = None,
+        urls_csv: Annotated[
+            Path | None,
+            Option(
+                "--urls_csv",
+                help="File containing URLs to capture (CSV format)",
+                file_okay=True,
+                dir_okay=False,
+                exists=True,
+            ),
+        ] = None,
+        wait_time: Annotated[
+            int, Option("--wait-time", "-t", help="Seconds to wait before capturing screenshot")
+        ] = 2,
+        scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
 ):
     """
     Execute a batch process to capture screenshots for a list of URLs provided via text
@@ -265,14 +275,15 @@ def batch(
         urls = urls_csv.read_text().splitlines()
 
     with Peeker(
-        output_dir=CONFIG.output_dir,
-        browser=Config.browser,
-        timeout=CONFIG.timeout,
-        normalize_urls=CONFIG.normalize_urls,
-        max_workers=CONFIG.max_workers,
-        width=CONFIG.width,
-        height=CONFIG.height,
-        log_level=CONFIG.log_level,
+            output_dir=CONFIG.output_dir,
+            browser=CONFIG.browser,
+            timeout=CONFIG.timeout,
+            normalize_urls=CONFIG.normalize_urls,
+            max_workers=CONFIG.max_workers,
+            width=CONFIG.width,
+            height=CONFIG.height,
+            ignore_https_errors=CONFIG.ignore_https_errors,
+            log_level=CONFIG.log_level,
     ) as peeker:
         output = peeker.capture_batch(urls, wait_time=wait_time, scroll=scroll)
         receipt = Path(CONFIG.output_dir, "receipt.txt")
@@ -281,20 +292,20 @@ def batch(
 
 @app.command()
 def nmap(
-    nmap_xml: Annotated[
-        Path,
-        Option(
-            "--nmap_xml",
-            help="Nmap XML output file",
-            file_okay=True,
-            dir_okay=False,
-            exists=True,
-        ),
-    ],
-    wait_time: Annotated[
-        int, Option("--wait-time", "-t", help="Seconds to wait before capturing screenshot")
-    ] = 2,
-    scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
+        nmap_xml: Annotated[
+            Path,
+            Option(
+                "--nmap_xml",
+                help="Nmap XML output file",
+                file_okay=True,
+                dir_okay=False,
+                exists=True,
+            ),
+        ],
+        wait_time: Annotated[
+            int, Option("--wait-time", "-t", help="Seconds to wait before capturing screenshot")
+        ] = 2,
+        scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
 ):
     """
     Parses an Nmap XML output file to extract HTTP/HTTPS services and captures screenshots of the discovered
@@ -322,14 +333,15 @@ def nmap(
                 hosts.append(f"https://{host.ip}:{port.port}")
 
     with Peeker(
-        output_dir=CONFIG.output_dir,
-        browser=Config.browser,
-        timeout=CONFIG.timeout,
-        normalize_urls=CONFIG.normalize_urls,
-        max_workers=CONFIG.max_workers,
-        width=CONFIG.width,
-        height=CONFIG.height,
-        log_level=CONFIG.log_level,
+            output_dir=CONFIG.output_dir,
+            browser=CONFIG.browser,
+            timeout=CONFIG.timeout,
+            normalize_urls=CONFIG.normalize_urls,
+            max_workers=CONFIG.max_workers,
+            width=CONFIG.width,
+            height=CONFIG.height,
+            ignore_https_errors=CONFIG.ignore_https_errors,
+            log_level=CONFIG.log_level,
     ) as peeker:
         output = peeker.capture_batch(hosts, wait_time=wait_time, scroll=scroll)
         receipt = Path(CONFIG.output_dir, "receipt.txt")
