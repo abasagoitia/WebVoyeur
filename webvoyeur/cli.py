@@ -6,12 +6,21 @@ from typing import Annotated
 
 from typer import BadParameter, Context, Option, Typer, echo
 
+from webvoyeur.nmap_parser import NmapParser
 from webvoyeur.peeker import Peeker
 from webvoyeur.utilities import BrowserType, parse_textfile
-from webvoyeur.nmap_parser import NmapParser
 
 
 class LogLevel(str, Enum):
+    """
+    Enumeration for different log levels.
+
+    This class defines various levels of logging as enumeration values.
+    It extends the `Enum` class and uses the string data type to represent
+    each log level. These levels can be utilized in applications to categorize
+    and manage logs based on their severity or purpose.
+    """
+
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
@@ -20,6 +29,25 @@ class LogLevel(str, Enum):
 
 @dataclass
 class Config:
+    """
+    Configuration class for managing application settings.
+
+    This class encapsulates various configuration options used throughout the
+    application. It provides default settings and allows customization of
+    parameters related to output directories, browser preferences, execution timeouts,
+    worker limits, screen dimensions, and logging levels.
+
+    Attributes:
+        output_dir (Path): The directory where output files will be saved.
+        browser (BrowserType): The type of browser to be used (e.g., Firefox, Chrome).
+        timeout (int): The maximum time, in seconds, to wait for operations.
+        normalize_urls (bool): Whether URLs should be normalized.
+        max_workers (int): The maximum number of worker threads or processes.
+        width (int): The width of the browser window in pixels.
+        height (int): The height of the browser window in pixels.
+        log_level (LogLevel | int): The logging level for the application.
+    """
+
     output_dir: Path = Path("./output")
     browser: BrowserType = BrowserType.firefox
     timeout: int = 10
@@ -63,6 +91,40 @@ def setup_cb(
         BrowserType, Option("--browser", "-b", help="Browser: chrome or firefox")
     ] = CONFIG.browser.value,
 ):
+    """
+    Configures the application based on the provided context and command-line options.
+
+    This function sets up the global configuration by overriding default values with
+    specified command-line arguments. It also maps the selected log level to the
+    appropriate logging configuration.
+
+    Parameters:
+    ctx (Context): Command-line context object used to process options and arguments.
+
+    log_level (LogLevel, optional): Specifies the logging level for the output. Default
+    value is derived from CONFIG.log_level.
+
+    output_dir (Path, optional): Directory for the output files. Only directories are
+    allowed, and it cannot already exist. Default value is derived from CONFIG.output_dir.
+
+    normalize_urls (bool, optional): Determines whether to automatically add "https://" to
+    URLs that do not specify a protocol. Defaults to the value in CONFIG.normalize_urls.
+
+    max_workers (int, optional): Number of concurrent capture operations allowed. Defaults
+    to the value in CONFIG.max_workers.
+
+    width (int, optional): Width of the browser’s viewport in pixels. Defaults to the value
+    in CONFIG.width.
+
+    height (int, optional): Height of the browser’s viewport in pixels. Defaults to the
+    value in CONFIG.height.
+
+    browser (BrowserType, optional): Specifies the browser type to be used, such as
+    "chrome" or "firefox". Defaults to the value in CONFIG.browser.
+
+    Returns:
+    None
+    """
     global CONFIG
     level_map = {
         LogLevel.DEBUG: logging.DEBUG,
@@ -101,6 +163,31 @@ def single(
     ] = 2,
     scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
 ):
+    """
+    Capture a screenshot of a single webpage and save it to a specified file.
+
+    This function uses a Peeker instance to capture a screenshot of the provided
+    URL and saves it to the specified filepath. Additional options include waiting
+    for a specified time before taking the screenshot and capturing the full
+    scrollable page if needed.
+
+    Attributes:
+        url (str): URL of the webpage to capture.
+        filename (Path, optional): Path to save the captured screenshot.
+        wait_time (int, optional): Number of seconds to wait before taking the
+            screenshot. Defaults to 2 seconds.
+        scroll (bool, optional): Whether to capture the entire scrollable page.
+            Defaults to False.
+
+    Args:
+        url: URL to capture.
+        filename: Filepath to save output file. Optional.
+        wait_time: Seconds to wait before capturing screenshot. Optional.
+        scroll: Whether to capture the full scrollable page. Optional.
+
+    Returns:
+        None
+    """
     with Peeker(
         output_dir=CONFIG.output_dir,
         browser=Config.browser,
@@ -143,6 +230,28 @@ def batch(
     ] = 2,
     scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
 ):
+    """
+    Execute a batch process to capture screenshots for a list of URLs provided via text
+    file or CSV file.
+
+    Parameters:
+        urls_txt (Path | None): File containing URLs to capture. Must be a valid file path
+            to a text file.
+        urls_csv (Path | None): File containing URLs to capture in CSV format. Must be a
+            valid file path to a CSV file.
+        wait_time (int): Seconds to wait before capturing the screenshot. Defaults to 2.
+        scroll (bool): If set to True, captures the full scrollable area of the page.
+
+    Raises:
+        BadParameter: Raised if neither --urls_txt nor --urls_csv is specified, or both
+            are provided simultaneously.
+
+    This function reads a list of URLs from either a text file or a CSV file and utilizes
+    the Peeker utility to capture screenshots for each URL. Options are provided to
+    customize the delay before capturing and the ability to capture a full scrollable page.
+    A receipt file containing the list of captured URLs is generated in the configured
+    output directory.
+    """
     if urls_txt is None and urls_csv is None:
         raise BadParameter("Either --urls_txt or --urls_csv must be specified")
 
@@ -187,6 +296,22 @@ def nmap(
     ] = 2,
     scroll: Annotated[bool, Option("--scroll", "-s", help="Capture full scrollable page")] = False,
 ):
+    """
+    Parses an Nmap XML output file to extract HTTP/HTTPS services and captures screenshots of the discovered
+    web services. Outputs the results to a specified directory.
+
+    Args:
+        nmap_xml (Path): Nmap XML output file. The file must exist and only files are allowed.
+        wait_time (int): Seconds to wait before capturing the screenshot. Defaults to 2.
+        scroll (bool): Indicates whether to capture the full scrollable webpage. Defaults to False.
+
+    Raises:
+        Any errors encountered during the parsing of the Nmap XML file or the screenshot
+        capture process will be propagated.
+
+    Returns:
+        None
+    """
     parser = NmapParser(nmap_xml)
     hosts: list[str] = []
     for host in parser.hosts:
@@ -212,6 +337,17 @@ def nmap(
 
 
 def cli_main():
+    """
+    Entry point for the command-line interface (CLI).
+
+    This function initializes and runs the CLI application by invoking the app function.
+
+    Functions:
+        app (function): Represents the main CLI application logic.
+
+    Returns:
+        None
+    """
     app()
 
 
