@@ -87,6 +87,4 @@ class NmapParser:
 
 
 if __name__ == "__main__":
-    parser = NmapParser(Path("/tmp/scan.xml"))
-    for host in parser._hosts:
-        print(host)
+    raise NotImplementedError("This script is for demonstration purposes only. Please use the library in your own code.")
