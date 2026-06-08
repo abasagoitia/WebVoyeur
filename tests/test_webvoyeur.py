@@ -760,7 +760,7 @@ class TestEdgeCases:
             urls = [f"file://{f.absolute()}" for f in html_files]
             results = peeker.capture_batch(urls)
 
-            assert len(results) == 1
+            assert len(results) == 3
         finally:
             peeker.close()
 
