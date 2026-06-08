@@ -87,4 +87,5 @@ class NmapParser:
 
 
 if __name__ == "__main__":
-    raise NotImplementedError("This script is for demonstration purposes only. Please use the library in your own code.")
+    raise NotImplementedError(
+        "This script is for demonstration purposes only. Please use the library in your own code.")
