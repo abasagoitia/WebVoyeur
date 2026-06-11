@@ -4,6 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
+from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn, TimeRemainingColumn
 from typer import BadParameter, Context, Option, Typer, echo
 
 from webvoyeur.nmap_parser import NmapParser
@@ -285,9 +286,25 @@ def batch(
             ignore_https_errors=CONFIG.ignore_https_errors,
             log_level=CONFIG.log_level,
     ) as peeker:
-        output = peeker.capture_batch(urls, wait_time=wait_time, scroll=scroll)
-        receipt = Path(CONFIG.output_dir, "receipt.txt")
-        receipt.write_text("\n".join(output.keys()))
+        with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TextColumn("{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+        ) as progress:
+            task_id = progress.add_task("Capturing screenshots", total=len(urls))
+
+            def advance_progress(url: str, path: Path | None) -> None:
+                progress.advance(task_id)
+
+            output = peeker.capture_batch(
+                urls,
+                wait_time=wait_time,
+                scroll=scroll,
+                progress_callback=advance_progress,
+            )
 
 
 @app.command()
@@ -343,9 +360,25 @@ def nmap(
             ignore_https_errors=CONFIG.ignore_https_errors,
             log_level=CONFIG.log_level,
     ) as peeker:
-        output = peeker.capture_batch(hosts, wait_time=wait_time, scroll=scroll)
-        receipt = Path(CONFIG.output_dir, "receipt.txt")
-        receipt.write_text("\n".join(output.keys()))
+        with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TextColumn("{task.completed}/{task.total}"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+        ) as progress:
+            task_id = progress.add_task("Capturing screenshots", total=len(hosts))
+
+            def advance_progress(url: str, path: Path | None) -> None:
+                progress.advance(task_id)
+
+            output = peeker.capture_batch(
+                hosts,
+                wait_time=wait_time,
+                scroll=scroll,
+                progress_callback=advance_progress,
+            )
 
 
 def cli_main():

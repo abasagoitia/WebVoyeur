@@ -34,9 +34,9 @@ import asyncio
 import logging
 import subprocess
 import sys
-import time
 from logging import Logger
 from pathlib import Path
+from typing import Callable
 
 from playwright.async_api import Browser, BrowserContext
 from playwright.async_api import Error as PlaywrightError
@@ -52,6 +52,20 @@ DEFAULT_MAX_WORKERS = 4
 DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
 DEFAULT_TIMEOUT = 10
+
+
+class EventTypeFilter(logging.Filter):
+    def __init__(self, event_type: str):
+        super().__init__()
+        self.event_type = event_type
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return getattr(record, "event_type", None) == self.event_type
+
+
+class NoEventTypeFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not hasattr(record, "event_type")
 
 
 class Peeker:
@@ -103,26 +117,26 @@ class Peeker:
             ignore_https_errors: bool = True,
             log_level: int = logging.INFO,
     ):
-        """Initialize the Peeker with configuration parameters.
+        """
+        Initializes the configuration and settings required for the class instance.
 
-        Args:
-            output_dir: Directory path where screenshots will be saved.
-                Will be created if it doesn't exist.
-            browser: Browser type to use (firefox or chromium).
-            timeout: Maximum time in seconds to wait for page load.
-                Must be positive.
-            normalize_urls: If True, automatically adds https:// to URLs
-                that don't have a protocol.
-            max_workers: Maximum number of concurrent capture operations
-                for batch processing. Must be positive.
-            width: Viewport width in pixels. Must be positive.
-            height: Viewport height in pixels. Must be positive.
-            log_level: Logging level (e.g., logging.INFO, logging.DEBUG).
+        This constructor sets up various parameters and environment configurations, including output
+        directories, browser settings, timeouts, logging configurations, and other options. It performs
+        validation on several inputs and initializes internal logging mechanisms for event tracking.
+
+        Parameters:
+            output_dir (Path | str): Path to the directory for storing output files.
+            browser (BrowserType): The type of browser to use for operations.
+            timeout (int): Timeout duration for operations in milliseconds.
+            normalize_urls (bool): Flag indicating whether to normalize URLs during processing.
+            max_workers (int): Maximum number of concurrent workers allowed.
+            width (int): Width of the browser viewport in pixels.
+            height (int): Height of the browser viewport in pixels.
+            ignore_https_errors (bool): Specifies whether to ignore HTTPS certificate errors.
+            log_level (int): Logging level for controlling log verbosity.
 
         Raises:
-            TypeError: If a browser is not a BrowserType instance.
-            ValueError: If timeout, max_workers, width, or height are invalid.
-            RuntimeError: If browser initialization fails.
+            TypeError: If the `browser` parameter is not an instance of BrowserType.
         """
         # _ensure_playwright_browsers()
         self._output_dir = Path(output_dir)
@@ -142,12 +156,28 @@ class Peeker:
         self._initialized = False
         self._logger: Logger = logging.getLogger(__name__)
         self._logger.setLevel(log_level)
+        self._logger.propagate = False
         if not self._logger.handlers:
-            handler = logging.StreamHandler()
-            handler.setLevel(log_level)
-            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-            handler.setFormatter(formatter)
-            self._logger.addHandler(handler)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(log_level)
+            stream_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            stream_handler.setFormatter(stream_formatter)
+            stream_handler.addFilter(NoEventTypeFilter())
+            self._logger.addHandler(stream_handler)
+
+            file_formatter = logging.Formatter("%(message)s")
+
+            complete_handler = logging.FileHandler(self._output_dir / "complete.log", mode="a")
+            complete_handler.setLevel(logging.INFO)
+            complete_handler.setFormatter(file_formatter)
+            complete_handler.addFilter(EventTypeFilter("complete"))
+            self._logger.addHandler(complete_handler)
+
+            incomplete_handler = logging.FileHandler(self._output_dir / "incomplete.log", mode="a")
+            incomplete_handler.setLevel(logging.INFO)
+            incomplete_handler.setFormatter(file_formatter)
+            incomplete_handler.addFilter(EventTypeFilter("incomplete"))
+            self._logger.addHandler(incomplete_handler)
 
         self._initialize_eventloop()
 
@@ -260,8 +290,14 @@ class Peeker:
             self._logger.debug(f"No filename specified, using default: {filename}")
 
         screenshot_path = self._output_dir / filename
-        await page.screenshot(path=str(screenshot_path), full_page=scroll)
-        self._logger.info(f"Screenshot saved to: {screenshot_path}")
+        try:
+            await page.screenshot(path=str(screenshot_path), full_page=scroll)
+        except Exception as e:
+            self._logger.info(f"{url} - {e}", extra={"event_type": "incomplete"})
+            raise
+
+        self._logger.info(f"{url} - {screenshot_path}", extra={"event_type": "complete"})
+        self._logger.debug(f"Screenshot saved to: {screenshot_path}")
 
         return screenshot_path
 
@@ -306,7 +342,7 @@ class Peeker:
             )
 
         except PlaywrightError as e:
-            self._logger.error(f"Error capturing page: {e}")
+            self._logger.warning(f"Error capturing page: {e}")
             return None
 
         finally:
@@ -317,7 +353,8 @@ class Peeker:
                     self._logger.debug(f"Error closing context: {e}")
 
     async def _async_batch(
-            self, urls: list[str], wait_time: int = DEFAULT_WAIT_TIME, scroll: bool = False
+            self, urls: list[str], wait_time: int = DEFAULT_WAIT_TIME, scroll: bool = False,
+            progress_callback: Callable[[str, Path | None], None] | None = None
     ) -> dict[str, Path | None]:
         """Asynchronously capture multiple webpage screenshots concurrently.
 
@@ -329,6 +366,8 @@ class Peeker:
             wait_time: Additional wait time in seconds after the page loads
                 for each URL.
             scroll: Whether to capture full scrollable pages.
+            progress_callback: Optional callback called after each URL finishes.
+                Receives the URL and its resulting Path, or None if capture failed.
 
         Returns:
             Dictionary mapping each URL to its screenshot Path (or None if
@@ -339,7 +378,6 @@ class Peeker:
         """
         semaphore = asyncio.Semaphore(self._max_workers)
         results: dict[str, Path | None] = {}
-        start_time = time.time()
 
         async def worker(url: str) -> None:
             """Worker coroutine to capture a single URL.
@@ -359,7 +397,6 @@ class Peeker:
                     )
                     results[url] = path
                 except Exception as e:
-                    self._logger.error(f"Worker error for {url}: {e}")
                     results[url] = None
                 finally:
                     if context is not None:
@@ -368,10 +405,12 @@ class Peeker:
                         except Exception:
                             pass
 
+                    if progress_callback is not None:
+                        progress_callback(url, results[url])
+
         tasks = [asyncio.create_task(worker(url)) for url in urls]
         await asyncio.gather(*tasks)
 
-        self._logger.info(f"Batch capture complete in {time.time() - start_time:.2f} seconds")
         return results
 
     def capture_single(
@@ -427,8 +466,12 @@ class Peeker:
         )
 
     def capture_batch(
-            self, urls: list[str], wait_time: int = DEFAULT_WAIT_TIME, scroll: bool = False
-    ) -> dict:
+            self,
+            urls: list[str],
+            wait_time: int = DEFAULT_WAIT_TIME,
+            scroll: bool = False,
+            progress_callback: Callable[[str, Path | None], None] | None = None,
+    ) -> dict[str, Path | None]:
         """Capture multiple webpage screenshots concurrently (synchronous).
 
         This is the main public method for batch capturing webpages. It
@@ -441,6 +484,8 @@ class Peeker:
                 for each URL. Must be non-negative.
             scroll: If True, captures full scrollable pages. If False,
                 captures only viewports.
+            progress_callback: Optional callback called after each URL finishes.
+                Receives the URL and its resulting Path, or None if capture failed.
 
         Returns:
             Dictionary mapping each URL to its screenshot Path (or None if
@@ -472,9 +517,14 @@ class Peeker:
 
         wait_time = _validate_wait_time(wait_time)
 
-        self._logger.info(f"Capturing batch job")
+        self._logger.debug("Capturing batch job")
         return self._loop.run_until_complete(
-            self._async_batch(urls=urls, wait_time=wait_time, scroll=scroll)
+            self._async_batch(
+                urls=urls,
+                wait_time=wait_time,
+                scroll=scroll,
+                progress_callback=progress_callback,
+            )
         )
 
     def close(self) -> None:
